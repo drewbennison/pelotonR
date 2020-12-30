@@ -7,8 +7,8 @@ library(lubridate)
 library(data.table)
 
 #set environment variables
-Sys.setenv(PELOTON_LOGIN = "dbennison")
-Sys.setenv(PELOTON_PASSWORD = "Maddie11!")
+Sys.setenv(PELOTON_LOGIN = "")
+Sys.setenv(PELOTON_PASSWORD = "")
 
 #authorize
 peloton_auth()
