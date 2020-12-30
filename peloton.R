@@ -22,11 +22,11 @@ num_workouts <- 100 #set to max number of workouts you want to retrieve
 joins <- ""
 
 
-#how long is the workout you are doing
-length_workout_seconds <- 30*60
+peloton_live_stats <- function(workout_length_in_minutes) {
+  Sys.sleep(60)
 
-#while your workout is happening
-for(i in seq(1, length_workout_seconds+60, 30)) {
+#while your workout is happening, update graphs every 30 seconds
+for(i in seq(1, workout_length_in_minutes*60 + 120, 30)) {
 
 #pull in all workouts
 workouts <- peloton_api(glue::glue("/api/user/{user_id}/workouts?{joins}&limit={num_workouts}&page=0"))
@@ -147,10 +147,10 @@ show(figure)
 Sys.sleep(30)
 
 }
+}
 
-masterdata2 %>% 
-  filter(id == "83bb7bcc42094d91a99c0a08c4159091") %>% 
-  ggplot(aes(x=Cadence, y=Output)) +
-  geom_line()
+peloton_live_stats(10)
+
+
   
   
