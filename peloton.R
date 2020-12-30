@@ -5,10 +5,11 @@ library("pelotonR")
 library(tidyverse)
 library(lubridate)
 library(data.table)
+library(ggpubr)
 
 #set environment variables
-Sys.setenv(PELOTON_LOGIN = "")
-Sys.setenv(PELOTON_PASSWORD = "")
+Sys.setenv(PELOTON_LOGIN = "dbennison")
+Sys.setenv(PELOTON_PASSWORD = "Maddie11!")
 
 #authorize
 peloton_auth()
@@ -19,19 +20,34 @@ user_id <- me$id
 num_workouts <- 100
 joins <- ""
 
-workouts_start <- peloton_api(glue::glue("/api/user/{user_id}/workouts?{joins}&limit={num_workouts}&page=0"))
+
+length_workout_seconds <- 30*60
+
+for(i in seq(1, length_workout_seconds+60, 30)) {
+
+workouts <- peloton_api(glue::glue("/api/user/{user_id}/workouts?{joins}&limit={num_workouts}&page=0"))
 n_workouts <- length(workouts$content$data)
+
 
 all_cycle_workouts <- tibble()
 if (n_workouts > 0) {
-  for(i in c(1:n_workouts)) {
+  #for(i in c(2:n_workouts)) # for total stats
+  for(i in c(2:5)) { # for live stats
   temp_workouts <- parse_list_to_df(workouts$content$data[[i]])
   if (temp_workouts$fitness_discipline == "cycling") {
-    cycling_workout <- temp_workouts
+    cycling_workout <- temp_workouts %>% 
+      mutate(end_time = as.character(end_time))
     all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
                                     fill = TRUE)
     
   }
+  }
+  #get current workout
+  temp_workouts <- parse_list_to_df(workouts$content$data[[1]])
+  if(temp_workouts$fitness_discipline == "cycling") {
+  cycling_workout <- temp_workouts
+  all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
+                                  fill = TRUE)
   
   }
 }
@@ -85,12 +101,43 @@ masterdata2 <- master_data %>% left_join(average_summaries, by="id") %>%
 
 #done
 masterdata2 <- masterdata2 %>% unnest(cols = c(seconds_since_pedaling_start, Output, Cadence, Resistance, Speed))
+masterdata2 <- masterdata2 %>% mutate(minutes = seconds_since_pedaling_start/60)
 
-masterdata2 %>% 
-  filter(id == "83bb7bcc42094d91a99c0a08c4159091") %>% 
-  ggplot(aes(x=seconds_since_pedaling_start, y=Output)) +
+
+#get current ride id
+current_ride_id <- all_cycle_workouts %>% 
+  filter(is.na(end_time)) %>% 
+  select(id) %>% pull()
+
+g1 <- masterdata2 %>% 
+  filter(id == current_ride_id) %>% 
+  ggplot(aes(x=minutes, y=Cadence)) +
+  geom_line()
+
+g2 <-  masterdata2 %>% 
+  filter(id == current_ride_id) %>% 
+  ggplot(aes(x=minutes, y=Output)) +
+  geom_line()
+
+g3 <-  masterdata2 %>% 
+  filter(id == current_ride_id) %>% 
+  ggplot(aes(x=minutes, y=Resistance)) +
   geom_line() +
-  geom_hline(yintercept = 142)
+  ylim(0,100)
+
+g4 <-  masterdata2 %>% 
+  filter(id == current_ride_id) %>% 
+  ggplot(aes(x=minutes, y=Speed)) +
+  geom_line()
+
+figure <- ggarrange(g1, g2, g3, g4,
+                    labels = c("Cadence", "Output", "Resistance", "Speed"),
+                    ncol = 2, nrow = 2)
+
+show(figure)
+Sys.sleep(30)
+
+}
 
 masterdata2 %>% 
   filter(id == "83bb7bcc42094d91a99c0a08c4159091") %>% 
@@ -98,7 +145,3 @@ masterdata2 %>%
   geom_line()
   
   
-
-
-#averages over time
-
