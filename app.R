@@ -1,0 +1,314 @@
+#
+# This is a Shiny web application. You can run the application by clicking
+# the 'Run App' button above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    http://shiny.rstudio.com/
+#
+
+library(shiny)
+# packages
+library("pelotonR")
+library(tidyverse)
+library(lubridate)
+library(data.table)
+library(ggpubr)
+
+# Define UI for application that draws a histogram
+ui <- fluidPage(
+
+    # Application title
+    titlePanel("Peloton Live Tracker"),
+
+    # Sidebar with a slider input for number of bins 
+    sidebarLayout(
+        sidebarPanel(
+            textInput("username", "Peloton Username"),
+            passwordInput("pw", "Peloton Password"),
+            textInput("time", "How long is your workout (minutess)?"),
+            actionButton(inputId = "SubmitButton",label = "Start"),
+        ),
+
+        # Show a plot of the generated distribution
+        tabsetPanel(type = "tabs",
+                    tabPanel("Live Stats", plotOutput("distPlot")),
+                    tabPanel("Post Ride Analysis", plotOutput("summary")))
+        #mainPanel(
+        #   plotOutput("distPlot")
+        #)
+    )
+)
+
+# Define server logic required to draw a histogram
+server <- function(input, output) {
+        
+        autoInvalidate <- reactiveTimer(30000)
+        
+        observeEvent(input$SubmitButton,
+                 {
+                     if(input$username!=""&&input$pw!="")
+                         
+                     {
+                         peloton_auth(login = input$username, password = input$pw)
+                         me <- get_my_info() # peloton_api("api/me")
+                         user_id <- me$id
+                         
+                         output$distPlot <-  renderPlot({
+                             autoInvalidate()
+                             workouts <- peloton_api(glue::glue("/api/user/{user_id}/workouts?&limit=100&page=0"))
+                             n_workouts <- length(workouts$content$data)
+                             
+                             all_cycle_workouts <- tibble()
+                             if (n_workouts > 0) {
+                                 #for(i in c(2:n_workouts)) # for total stats
+                                 for(i in c(2:10)) { # for live stats
+                                     temp_workouts <- parse_list_to_df(workouts$content$data[[i]])
+                                     if (temp_workouts$fitness_discipline == "cycling") {
+                                         cycling_workout <- temp_workouts %>% 
+                                             mutate(end_time = as.character(end_time))
+                                         all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
+                                                                         fill = TRUE)
+                                         
+                                     }
+                                 }
+                                 #get current workout
+                                 temp_workouts <- parse_list_to_df(workouts$content$data[[1]])
+                                 if(temp_workouts$fitness_discipline == "cycling") {
+                                     cycling_workout <- temp_workouts
+                                     all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
+                                                                     fill = TRUE)
+                                     
+                                 }
+                             }
+                             
+                             workout_ids <- all_cycle_workouts$id
+                             
+                             #get performance stats for each workout
+                             keep <- tibble()
+                             for(i in c(1:length(workout_ids))) {
+                                 message(i)
+                                 test <- get_perfomance_graphs(workout_ids[i], every_n = 1)
+                                 keep <- rbindlist(list(keep, test), use.names = TRUE, fill = TRUE)
+                             }
+                             
+                             #extract pedal seconds
+                             pedal_seconds <- keep %>% select(id, seconds_since_pedaling_start)
+                             pedal_seconds <- pedal_seconds %>% unnest(cols=c(seconds_since_pedaling_start))
+                             
+                             #extract averages
+                             average_summaries <- keep %>% select(id, average_summaries) %>% unnest(cols = c(average_summaries)) %>% 
+                                 mutate(display_name = sapply(average_summaries,'[[',1),
+                                        display_unit = sapply(average_summaries,'[[',2),
+                                        value = sapply(average_summaries,'[[',3)) %>% 
+                                 select(-average_summaries) %>% 
+                                 pivot_wider(names_from = display_name, values_from = c(value, display_unit))
+                             
+                             #extract summaries
+                             totals_summaries <- keep %>% select(id, summaries) %>% unnest(cols = c(summaries)) %>% 
+                                 mutate(display_name = sapply(summaries,'[[',1),
+                                        display_unit = sapply(summaries,'[[',2),
+                                        value = sapply(summaries,'[[',3)) %>% 
+                                 select(-summaries) %>% 
+                                 pivot_wider(names_from = display_name, values_from = c(value, display_unit))
+                             
+                             #extract metrics
+                             metrics_summaries <- keep %>% select(id, metrics) %>% unnest(cols = c(metrics)) %>% 
+                                 mutate(display_name = sapply(metrics,'[[',1),
+                                        second_list = sapply(metrics,'[[',5)) %>% 
+                                 rename(id2 = id) %>% 
+                                 select(-metrics) %>% 
+                                 unnest(cols = c(second_list)) %>% 
+                                 group_by(id2, display_name) %>% 
+                                 mutate(row_marker = row_number()) %>% 
+                                 pivot_wider(names_from = c(display_name) ,values_from = c(second_list))
+                             
+                             #merge seconds with instantaneous stats
+                             master_data <- cbind(pedal_seconds, metrics_summaries)
+                             
+                             #bring in average summaries and totals summaries
+                             masterdata2 <- master_data %>% left_join(average_summaries, by="id") %>% 
+                                 left_join(totals_summaries)
+                             
+                             #done
+                             masterdata2 <- masterdata2 %>% unnest(cols = c(seconds_since_pedaling_start, Output, Cadence, Resistance, Speed))
+                             masterdata2 <- masterdata2 %>% mutate(minutes = seconds_since_pedaling_start/60)
+                             
+                             #add cumulative total output
+                             masterdata2 <- masterdata2 %>% 
+                                 group_by(id) %>% 
+                                 mutate(cum_average_output = cummean(Output)*minutes*60/1000)
+                             
+                             #get current ride id of live ride
+                             current_ride_id <- all_cycle_workouts %>% 
+                                 filter(is.na(end_time)) %>% 
+                                 select(id) %>% pull()
+                             
+                             #make performance plots
+                             g1 <- masterdata2 %>% 
+                                 filter(id == current_ride_id) %>% 
+                                 ggplot(aes(x=minutes, y=Cadence)) +
+                                 geom_line() +
+                                 xlim(0, input$time)
+                             
+                             
+                             g2 <-  masterdata2 %>% 
+                                 filter(id == current_ride_id) %>% 
+                                 ggplot(aes(x=minutes, y=Output)) +
+                                 geom_line() +
+                                 geom_line(aes(x=minutes, y=cum_average_output), color="red") +
+                                 xlim(0, input$time)
+                             
+                             g3 <-  masterdata2 %>% 
+                                 filter(id == current_ride_id) %>% 
+                                 ggplot(aes(x=minutes, y=Resistance)) +
+                                 geom_line() +
+                                 ylim(0,100) +
+                                 xlim(0, input$time)
+                             
+                             g4 <-  masterdata2 %>% 
+                                 filter(id == current_ride_id) %>% 
+                                 ggplot(aes(x=minutes, y=Speed)) +
+                                 geom_line() +
+                                 xlim(0, input$time)
+                             
+                             #arrange all plots together
+                             figure <- ggarrange(g1, g2, g3, g4,
+                                                 labels = c("Cadence", "Output", "Resistance", "Speed"),
+                                                 ncol = 2, nrow = 2)
+                             
+                             figure
+                             
+                         }) #end of live plot output
+                         
+                         
+                         
+                         
+                         #post ride stats
+                         output$summary <- renderPlot({
+                             
+                             workouts <- peloton_api(glue::glue("/api/user/{user_id}/workouts?&limit=1000&page=0"))
+                             n_workouts <- length(workouts$content$data)
+                             
+                             all_cycle_workouts <- tibble()
+                             if (n_workouts > 0) {
+                                 for(i in c(1:n_workouts)) { # for all stats
+                                     temp_workouts <- parse_list_to_df(workouts$content$data[[i]])
+                                     if (temp_workouts$fitness_discipline == "cycling") {
+                                         cycling_workout <- temp_workouts %>% 
+                                             mutate(end_time = as.character(end_time))
+                                         all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
+                                                                         fill = TRUE)
+                                         
+                                     }
+                                 }}
+                             
+                             workout_ids <- all_cycle_workouts$id
+                             
+                             #get performance stats for each workout
+                             keep <- tibble()
+                             for(i in c(1:length(workout_ids))) {
+                                 message(i)
+                                 test <- get_perfomance_graphs(workout_ids[i], every_n = 1)
+                                 keep <- rbindlist(list(keep, test), use.names = TRUE, fill = TRUE)
+                             }
+                             
+                             #extract pedal seconds
+                             pedal_seconds <- keep %>% select(id, seconds_since_pedaling_start)
+                             pedal_seconds <- pedal_seconds %>% unnest(cols=c(seconds_since_pedaling_start))
+                             
+                             #extract averages
+                             average_summaries <- keep %>% select(id, average_summaries) %>% unnest(cols = c(average_summaries)) %>% 
+                                 mutate(display_name = sapply(average_summaries,'[[',1),
+                                        display_unit = sapply(average_summaries,'[[',2),
+                                        value = sapply(average_summaries,'[[',3)) %>% 
+                                 select(-average_summaries) %>% 
+                                 pivot_wider(names_from = display_name, values_from = c(value, display_unit))
+                             
+                             #extract summaries
+                             totals_summaries <- keep %>% select(id, summaries) %>% unnest(cols = c(summaries)) %>% 
+                                 mutate(display_name = sapply(summaries,'[[',1),
+                                        display_unit = sapply(summaries,'[[',2),
+                                        value = sapply(summaries,'[[',3)) %>% 
+                                 select(-summaries) %>% 
+                                 pivot_wider(names_from = display_name, values_from = c(value, display_unit))
+                             
+                             #extract metrics
+                             metrics_summaries <- keep %>% select(id, metrics) %>% unnest(cols = c(metrics)) %>% 
+                                 mutate(display_name = sapply(metrics,'[[',1),
+                                        second_list = sapply(metrics,'[[',5)) %>% 
+                                 rename(id2 = id) %>% 
+                                 select(-metrics) %>% 
+                                 unnest(cols = c(second_list)) %>% 
+                                 group_by(id2, display_name) %>% 
+                                 mutate(row_marker = row_number()) %>% 
+                                 pivot_wider(names_from = c(display_name) ,values_from = c(second_list))
+                             
+                             #merge seconds with instantaneous stats
+                             master_data <- cbind(pedal_seconds, metrics_summaries)
+                             
+                             #bring in average summaries and totals summaries
+                             masterdata2 <- master_data %>% left_join(average_summaries, by="id") %>% 
+                                 left_join(totals_summaries)
+                             
+                             #done
+                             masterdata2 <- masterdata2 %>% unnest(cols = c(seconds_since_pedaling_start, Output, Cadence, Resistance, Speed))
+                             masterdata2 <- masterdata2 %>% mutate(minutes = seconds_since_pedaling_start/60)
+                             
+                             #add cumulative total output
+                             masterdata2 <- masterdata2 %>% 
+                                 group_by(id) %>% 
+                                 mutate(cum_average_output = cummean(Output)*minutes*60/1000)
+                             
+                             
+                             summary_1 <- masterdata2 %>% 
+                                 left_join(all_cycle_workouts, by=c("id")) %>% 
+                                 group_by(id, start_time, `value_Total Output`) %>% 
+                                 arrange(-minutes) %>% 
+                                 slice_head() %>% 
+                                 mutate(created_at = as_date(created_at),
+                                        output_per_minute = `value_Total Output` / minutes) %>% 
+                                 ggplot(aes(x=created_at, y=output_per_minute)) +
+                                 geom_point() +
+                                 geom_smooth(method = "lm", se=FALSE) +
+                                 labs(x="Ride date", y="Output per minute",
+                                      title = "Output over time")
+                             
+                             summary_2 <- masterdata2 %>% 
+                                 left_join(all_cycle_workouts, by=c("id")) %>% 
+                                 select(id, created_at) %>% 
+                                 unique() %>% 
+                                 mutate(created_at = as_date(created_at),
+                                        day_of_week = wday(created_at, label = TRUE)) %>% 
+                                 group_by(day_of_week) %>% 
+                                 count() %>% 
+                                 ggplot(aes(x=day_of_week, y=n)) +
+                                 geom_col() +
+                                 labs(x="", y="Number of rides",
+                                      title = "Most popular days to ride")
+                                 
+                             #arrange all plots together
+                             figure <- ggarrange(summary_1, summary_2,
+                                                 ncol = 2, nrow = 2)
+                             
+                             figure
+                                 
+                             
+                             
+                             
+                         }) #end of summary stats plot
+                        
+                         
+                         
+                         
+                     }
+                 })
+
+
+
+        
+
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
