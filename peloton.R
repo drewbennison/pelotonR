@@ -1,5 +1,6 @@
 #devtools::install_github("lgellis/pelotonR") # might be useful but not now
 #devtools::install_github("bweiher/pelotonR") # better
+#install.packages("ggpubr")
 
 # packages
 library("pelotonR")
@@ -50,7 +51,8 @@ if (n_workouts > 0) {
   #get current workout
   temp_workouts <- parse_list_to_df(workouts$content$data[[1]])
   if(temp_workouts$fitness_discipline == "cycling") {
-  cycling_workout <- temp_workouts
+  cycling_workout <- temp_workouts %>% 
+    mutate(end_time = as.character(end_time))
   all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
                                   fill = TRUE)
   
@@ -109,7 +111,6 @@ masterdata2 <- master_data %>% left_join(average_summaries, by="id") %>%
 #done
 masterdata2 <- masterdata2 %>% unnest(cols = c(seconds_since_pedaling_start, Output, Cadence, Resistance, Speed))
 masterdata2 <- masterdata2 %>% mutate(minutes = seconds_since_pedaling_start/60)
-
 
 #get current ride id of live ride
 current_ride_id <- all_cycle_workouts %>% 
