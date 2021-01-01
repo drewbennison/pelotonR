@@ -72,6 +72,10 @@ joins <- ""
       select(-average_summaries) %>% 
       pivot_wider(names_from = display_name, values_from = c(value, display_unit))
     
+    # Make values numeric - WHY ARE THESE VALUES ABOVE IN SUMMARIES COMING IN AS LISTS?
+    average_summaries <- average_summaries %>% 
+      mutate(across(.cols = dplyr::contains("value_"), .fns = as.numeric))
+    
     #extract totals summaries
     totals_summaries <- keep %>% select(id, summaries) %>% unnest(cols = c(summaries)) %>% 
       mutate(display_name = sapply(summaries,'[[',1),
@@ -81,6 +85,15 @@ joins <- ""
       pivot_wider(names_from = display_name, values_from = c(value, display_unit))
     
     # Adding weekly summaries compared to previous week -----------------------
+    
+    # Create lookup of day of week and weekday number
+    weekday_nums <- 1:7
+    weekday_names <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+    
+    day_num_lookup <- tibble(weekday_names, weekday_nums)
+    
+    today_day_num <- day_num_lookup %>% filter(weekday_names == weekdays(today())) %>% pull(weekday_nums)
+    days_since_monday <- today_day_num - 1
     
     ### Get weekly stats vs. last week
     joined_stats <- all_cycle_workouts %>% left_join(totals_summaries, by = "id")
@@ -94,6 +107,8 @@ joins <- ""
     # Summarise by week, then calculate differences
     week_sum_stats <- joined_stats %>% 
       filter(week_num  %in% c(isoweek(today()), isoweek(today()-7))) %>% 
+      filter(dplyr::between(as.Date(start_time), today() - days_since_monday, today()) | 
+               dplyr::between(as.Date(start_time), today() - 7 - days_since_monday, today() - 7)) %>% 
       group_by(week_num) %>% 
       summarise(total_weekly_output = sum(`value_Total Output`),
                 total_weekly_calories = sum(value_Calories),
