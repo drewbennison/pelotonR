@@ -32,7 +32,7 @@ joins <- ""
     all_cycle_workouts <- tibble()
     if (n_workouts > 0) {
       #for(i in c(2:n_workouts)) # for total stats
-      for(i in c(2:n_workouts)) { # for live stats
+      for(i in c(2:50)) { # for live stats
         temp_workouts <- parse_list_to_df(workouts$content$data[[i]])
         if (temp_workouts$fitness_discipline == "cycling") {
           cycling_workout <- temp_workouts %>% 
