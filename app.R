@@ -26,7 +26,7 @@ ui <- fluidPage(
         sidebarPanel(
             textInput("username", "Peloton Username"),
             passwordInput("pw", "Peloton Password"),
-            textInput("time", "How long is your workout (minutess)?"),
+            textInput("time", "How long is your workout (minutes)?"),
             actionButton(inputId = "SubmitButton",label = "Start"),
         ),
 
@@ -74,13 +74,26 @@ server <- function(input, output) {
                                  }
                                  #get current workout
                                  temp_workouts <- parse_list_to_df(workouts$content$data[[1]])
-                                 if(temp_workouts$fitness_discipline == "cycling") {
-                                     cycling_workout <- temp_workouts
+                                 if(temp_workouts$fitness_discipline == "cycling" && temp_workouts$has_pedaling_metrics==TRUE) {
+                                     cycling_workout <- temp_workouts %>% mutate(end_time = as.character(end_time))
                                      all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
                                                                      fill = TRUE)
                                      
+                                 } else{ #if current ride is not cycling
+                                     x <- ggplot() + annotate("text", x = input$time, y = 100, label = "NO LIVE RIDE") +
+                                         labs(x="", y="")
+                                     x
                                  }
                              }
+                             
+                             #check if there is a current workout
+                             is_there_current_workout <- all_cycle_workouts %>% filter(status != "COMPLETE")
+                             
+                             if(nrow(is_there_current_workout) == 0) {
+                                 x <- ggplot() + annotate("text", x = input$time, y = 10, label = "NO LIVE RIDE") +
+                                     labs(x="", y="")
+                                 x
+                             } else {
                              
                              workout_ids <- all_cycle_workouts$id
                              
@@ -148,29 +161,25 @@ server <- function(input, output) {
                              g1 <- masterdata2 %>% 
                                  filter(id == current_ride_id) %>% 
                                  ggplot(aes(x=minutes, y=Cadence)) +
-                                 geom_line() +
-                                 xlim(0, input$time)
+                                 geom_line()
                              
                              
                              g2 <-  masterdata2 %>% 
                                  filter(id == current_ride_id) %>% 
                                  ggplot(aes(x=minutes, y=Output)) +
                                  geom_line() +
-                                 geom_line(aes(x=minutes, y=cum_average_output), color="red") +
-                                 xlim(0, input$time)
+                                 geom_line(aes(x=minutes, y=cum_average_output), color="red")
                              
                              g3 <-  masterdata2 %>% 
                                  filter(id == current_ride_id) %>% 
                                  ggplot(aes(x=minutes, y=Resistance)) +
                                  geom_line() +
-                                 ylim(0,100) +
-                                 xlim(0, input$time)
+                                 ylim(0,100)
                              
                              g4 <-  masterdata2 %>% 
                                  filter(id == current_ride_id) %>% 
                                  ggplot(aes(x=minutes, y=Speed)) +
-                                 geom_line() +
-                                 xlim(0, input$time)
+                                 geom_line()
                              
                              #arrange all plots together
                              figure <- ggarrange(g1, g2, g3, g4,
@@ -178,7 +187,7 @@ server <- function(input, output) {
                                                  ncol = 2, nrow = 2)
                              
                              figure
-                             
+                             }
                          }) #end of live plot output
                          
                          
@@ -194,9 +203,8 @@ server <- function(input, output) {
                              if (n_workouts > 0) {
                                  for(i in c(1:n_workouts)) { # for all stats
                                      temp_workouts <- parse_list_to_df(workouts$content$data[[i]])
-                                     if (temp_workouts$fitness_discipline == "cycling") {
-                                         cycling_workout <- temp_workouts %>% 
-                                             mutate(end_time = as.character(end_time))
+                                     if (temp_workouts$fitness_discipline == "cycling" && temp_workouts$status == "COMPLETE") {
+                                         cycling_workout <- temp_workouts
                                          all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
                                                                          fill = TRUE)
                                          
@@ -209,8 +217,10 @@ server <- function(input, output) {
                              keep <- tibble()
                              for(i in c(1:length(workout_ids))) {
                                  message(i)
-                                 test <- get_perfomance_graphs(workout_ids[i], every_n = 1)
+                                 test <- get_perfomance_graphs(workout_ids[i], every_n = 10)
+                                 if(is.na(test$seconds_since_pedaling_start)==FALSE) {
                                  keep <- rbindlist(list(keep, test), use.names = TRUE, fill = TRUE)
+                                 }
                              }
                              
                              #extract pedal seconds
@@ -268,6 +278,7 @@ server <- function(input, output) {
                                  slice_head() %>% 
                                  mutate(created_at = as_date(created_at),
                                         output_per_minute = `value_Total Output` / minutes) %>% 
+                                 filter(minutes>6) %>% 
                                  ggplot(aes(x=created_at, y=output_per_minute)) +
                                  geom_point() +
                                  geom_smooth(method = "lm", se=FALSE) +
@@ -279,7 +290,7 @@ server <- function(input, output) {
                                  select(id, created_at) %>% 
                                  unique() %>% 
                                  mutate(created_at = as_date(created_at),
-                                        day_of_week = wday(created_at, label = TRUE)) %>% 
+                                        day_of_week = lubridate::wday(created_at, label=TRUE)) %>% 
                                  group_by(day_of_week) %>% 
                                  count() %>% 
                                  ggplot(aes(x=day_of_week, y=n)) +
