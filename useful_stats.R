@@ -61,7 +61,9 @@ joins <- ""
     for(i in c(1:length(workout_ids))) {
       message(i)
       test <- get_perfomance_graphs(workout_ids[i])
+      if(is.na(test$seconds_since_pedaling_start)==FALSE){
       keep <- rbindlist(list(keep, test), use.names = TRUE, fill = TRUE)
+      }
     }
     
     #extract averages
@@ -71,10 +73,6 @@ joins <- ""
              value = sapply(average_summaries,'[[',3)) %>% 
       select(-average_summaries) %>% 
       pivot_wider(names_from = display_name, values_from = c(value, display_unit))
-    
-    # Make values numeric - WHY ARE THESE VALUES ABOVE IN SUMMARIES COMING IN AS LISTS?
-    average_summaries <- average_summaries %>% 
-      mutate(across(.cols = dplyr::contains("value_"), .fns = as.numeric))
     
     #extract totals summaries
     totals_summaries <- keep %>% select(id, summaries) %>% unnest(cols = c(summaries)) %>% 
@@ -127,7 +125,7 @@ joins <- ""
                                                             week_sum_stats[2,"WOW_workout_diff"] == 0 ~ paste0(" the same number of "),
                                                             week_sum_stats[2,"WOW_workout_diff"] < 0 ~ paste0(abs(week_sum_stats[2,"WOW_workout_diff"]), " less ")
                               ), 
-                              if_else(week_sum_stats[2,"WOW_workout_diff"] == 1 | week_sum_stats[2,"WOW_workout_diff"] == -1, "workout this week.", "workouts this week."))
+                              if_else(week_sum_stats[2,"WOW_workout_diff"] == 1 | week_sum_stats[2,"WOW_workout_diff"] == -1, "workout this week compared to this time last week.", "workouts this week compared to this time last week."))
     
     total_output_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_output)
     total_cals_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_cals)
