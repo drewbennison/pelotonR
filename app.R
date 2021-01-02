@@ -37,7 +37,7 @@ ui <- fluidPage(
                     tabPanel("Live Stats", plotOutput("distPlot")),
                     tabPanel("Post Ride Analysis",
                              fluidRow(
-                                 column(12, h2(welcome_message))
+                                 column(12, uiOutput("welcome_message"))
                              ),
                              fluidRow(h3("Your weekly stats")),
                              fluidRow(
@@ -374,6 +374,8 @@ server <- function(input, output) {
                                                                                  week_sum_stats[2,"WOW_workout_diff"] < 0 ~ paste0(abs(week_sum_stats[2,"WOW_workout_diff"]), " less ")
                                                    ), 
                                                    if_else(week_sum_stats[2,"WOW_workout_diff"] == 1 | week_sum_stats[2,"WOW_workout_diff"] == -1, "workout this week compared to this time last week.", "workouts this week compared to this time last week."))
+                         
+                         output$welcome_message <- renderUI(h2(welcome_message))
                          
                          total_output_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_output)
                          total_cals_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_cals)
