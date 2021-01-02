@@ -29,14 +29,35 @@ ui <- fluidPage(
             textInput("time", "How long is your workout (minutes)?"),
             actionButton(inputId = "SubmitButton",label = "Start"),
         ),
-
+        mainPanel(
         # Show a plot of the generated distribution
         tabsetPanel(type = "tabs",
                     tabPanel("Live Stats", plotOutput("distPlot")),
-                    tabPanel("Post Ride Analysis", plotOutput("summary")))
+                    tabPanel("Post Ride Analysis",
+                             fluidRow(
+                                 column(12, h2(welcome_message))
+                             ),
+                             fluidRow(h3("Your weekly stats")),
+                             fluidRow(
+                                 column(3, uiOutput("wow_total_output")),
+                                 column(3, uiOutput("wow_total_cals")),
+                                 column(3, uiOutput("wow_total_distance")),
+                                 column(3, uiOutput("wow_avg_output"))),
+                             fluidRow(
+                                 column(3, h4("Total Output")),
+                                 column(3, h4("Total Calories")),
+                                 column(3, h4("Total Distance")),
+                                 column(3, h4("Average Output"))
+                             ),
+                             fluidRow(
+                             plotOutput("summary")
+                             )
+                             )
+                    )
         #mainPanel(
         #   plotOutput("distPlot")
         #)
+    )
     )
 )
 
@@ -303,11 +324,64 @@ server <- function(input, output) {
                                                  ncol = 2, nrow = 2)
                              
                              figure
-                                 
                              
-                             
-                             
+
                          }) #end of summary stats plot
+                         
+                         # Welcome Message and WOW Stats -------------------------------------------
+                         
+                         # Create lookup of day of week and weekday number
+                         weekday_nums <- 1:7
+                         weekday_names <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+                         
+                         day_num_lookup <- tibble(weekday_names, weekday_nums)
+                         
+                         today_day_num <- day_num_lookup %>% filter(weekday_names == weekdays(today())) %>% pull(weekday_nums)
+                         days_since_monday <- today_day_num - 1
+                         
+                         ### Get weekly stats vs. last week
+                         joined_stats <- all_cycle_workouts %>% left_join(totals_summaries, by = "id")
+                         joined_stats <- joined_stats %>% left_join(average_summaries, by = "id")
+                         
+                         # Add Week number to workouts using epiweek
+                         joined_stats <- joined_stats %>% 
+                             mutate(week_num = isoweek(start_time),
+                                    start_date = as.Date(start_time))
+                         
+                         # Summarise by week, then calculate differences
+                         week_sum_stats <- joined_stats %>% 
+                             filter(week_num  %in% c(isoweek(today()), isoweek(today()-7))) %>% 
+                             filter(dplyr::between(as.Date(start_time), today() - days_since_monday, today()) | 
+                                        dplyr::between(as.Date(start_time), today() - 7 - days_since_monday, today() - 7)) %>% 
+                             group_by(week_num) %>% 
+                             summarise(total_weekly_output = sum(`value_Total Output`),
+                                       total_weekly_calories = sum(value_Calories),
+                                       total_weekly_distance = sum(value_Distance),
+                                       avg_weekly_output = mean(`value_Avg Output`),
+                                       workout_count = n()) %>% 
+                             arrange(week_num) %>% 
+                             mutate(WOW_total_output = scales::percent((total_weekly_output - lag(total_weekly_output, n = 1L)) / lag(total_weekly_output, n = 1L), accuracy = .1),
+                                    WOW_total_cals = scales::percent((total_weekly_calories - lag(total_weekly_calories, n = 1L)) / lag(total_weekly_calories, n = 1L), accuracy = .1),
+                                    WOW_total_distance = scales::percent((total_weekly_distance - lag(total_weekly_distance, n = 1L)) / lag(total_weekly_distance, n = 1L), accuracy = .1),
+                                    WOW_avg_output = scales::percent((avg_weekly_output - lag(avg_weekly_output, n = 1L)) / lag(avg_weekly_output, n = 1L), accuracy = .1),
+                                    WOW_workout_diff = workout_count - lag(workout_count))
+                         
+                         welcome_message <- paste0("Hi, ", if_else(is.na(me$first_name)==T, me$username, me$first_name),
+                                                   ". You have done ", case_when(week_sum_stats[2,"WOW_workout_diff"] > 0 ~ paste0(week_sum_stats[2,"WOW_workout_diff"], " more "),
+                                                                                 week_sum_stats[2,"WOW_workout_diff"] == 0 ~ paste0(" the same number of "),
+                                                                                 week_sum_stats[2,"WOW_workout_diff"] < 0 ~ paste0(abs(week_sum_stats[2,"WOW_workout_diff"]), " less ")
+                                                   ), 
+                                                   if_else(week_sum_stats[2,"WOW_workout_diff"] == 1 | week_sum_stats[2,"WOW_workout_diff"] == -1, "workout this week compared to this time last week.", "workouts this week compared to this time last week."))
+                         
+                         total_output_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_output)
+                         total_cals_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_cals)
+                         total_distance_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_distance)
+                         avg_output_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_avg_output)
+                         
+                         output$wow_total_output <- renderUI(h3(total_output_diff, style = paste0("color:", if_else(total_output_diff > 0, "green;", "red;"))))
+                         output$wow_total_distance <- renderUI(h3(total_distance_diff, style = paste0("color:", if_else(total_distance_diff > 0, "green;", "red;"))))
+                         output$wow_total_cals <- renderUI(h3(total_cals_diff, style = paste0("color:", if_else(total_cals_diff > 0, "green;", "red;"))))
+                         output$wow_avg_output <- renderUI(h3(avg_output_diff, style = paste0("color:", if_else(avg_output_diff > 0, "green;", "red;"))))
                         
                          
                          
