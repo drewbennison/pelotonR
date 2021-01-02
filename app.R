@@ -39,7 +39,7 @@ ui <- fluidPage(
                              fluidRow(
                                  column(12, uiOutput("welcome_message"))
                              ),
-                             fluidRow(h3("Your weekly stats")),
+                             fluidRow(h3("Your weekly stats", style = "padding-left:20px;")),
                              fluidRow(
                                  column(3, uiOutput("wow_total_output")),
                                  column(3, uiOutput("wow_total_cals")),
@@ -213,69 +213,67 @@ server <- function(input, output) {
                              }
                          }) #end of live plot output
                          
+                         # Rerun basic tables for post-ride analysis page
+                         workouts <- peloton_api(glue::glue("/api/user/{user_id}/workouts?&limit=1000&page=0"))
+                         n_workouts <- length(workouts$content$data)
                          
-                         
-                         
-                         #post ride stats
-                         output$summary <- renderPlot({
-                             
-                             workouts <- peloton_api(glue::glue("/api/user/{user_id}/workouts?&limit=1000&page=0"))
-                             n_workouts <- length(workouts$content$data)
-                             
-                             all_cycle_workouts <- tibble()
-                             if (n_workouts > 0) {
-                                 for(i in c(1:n_workouts)) { # for all stats
-                                     temp_workouts <- parse_list_to_df(workouts$content$data[[i]])
-                                     if (temp_workouts$fitness_discipline == "cycling" && temp_workouts$status == "COMPLETE") {
-                                         cycling_workout <- temp_workouts
-                                         all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
-                                                                         fill = TRUE)
-                                         
-                                     }
-                                 }}
-                             
-                             workout_ids <- all_cycle_workouts$id
-                             
-                             #get performance stats for each workout
-                             keep <- tibble()
-                             for(i in c(1:length(workout_ids))) {
-                                 message(i)
-                                 test <- get_perfomance_graphs(workout_ids[i], every_n = 10)
-                                 if(is.na(test$seconds_since_pedaling_start)==FALSE) {
-                                 keep <- rbindlist(list(keep, test), use.names = TRUE, fill = TRUE)
+                         all_cycle_workouts <- tibble()
+                         if (n_workouts > 0) {
+                             for(i in c(1:n_workouts)) { # for all stats
+                                 temp_workouts <- parse_list_to_df(workouts$content$data[[i]])
+                                 if (temp_workouts$fitness_discipline == "cycling" && temp_workouts$status == "COMPLETE") {
+                                     cycling_workout <- temp_workouts
+                                     all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
+                                                                     fill = TRUE)
+                                     
                                  }
+                             }}
+                         
+                         workout_ids <- all_cycle_workouts$id
+                         
+                         #get performance stats for each workout
+                         keep <- tibble()
+                         for(i in c(1:length(workout_ids))) {
+                             message(i)
+                             test <- get_perfomance_graphs(workout_ids[i], every_n = 10)
+                             if(is.na(test$seconds_since_pedaling_start)==FALSE) {
+                                 keep <- rbindlist(list(keep, test), use.names = TRUE, fill = TRUE)
                              }
-                             
-                             #extract pedal seconds
-                             pedal_seconds <- keep %>% select(id, seconds_since_pedaling_start)
-                             pedal_seconds <- pedal_seconds %>% unnest(cols=c(seconds_since_pedaling_start))
-                             
-                             #extract averages
-                             average_summaries <- keep %>% select(id, average_summaries) %>% unnest(cols = c(average_summaries)) %>% 
-                                 mutate(display_name = sapply(average_summaries,'[[',1),
-                                        display_unit = sapply(average_summaries,'[[',2),
-                                        value = sapply(average_summaries,'[[',3)) %>% 
-                                 select(-average_summaries) %>% 
-                                 pivot_wider(names_from = display_name, values_from = c(value, display_unit))
-                             
-                             #extract summaries
-                             totals_summaries <- keep %>% select(id, summaries) %>% unnest(cols = c(summaries)) %>% 
-                                 mutate(display_name = sapply(summaries,'[[',1),
-                                        display_unit = sapply(summaries,'[[',2),
-                                        value = sapply(summaries,'[[',3)) %>% 
-                                 select(-summaries) %>% 
-                                 pivot_wider(names_from = display_name, values_from = c(value, display_unit))
-                             
-                             #extract metrics
-                             metrics_summaries <- keep %>% select(id, metrics) %>% unnest(cols = c(metrics)) %>% 
-                                 mutate(display_name = sapply(metrics,'[[',1),
-                                        second_list = sapply(metrics,'[[',5)) %>% 
-                                 rename(id2 = id) %>% 
-                                 select(-metrics) %>% 
-                                 unnest(cols = c(second_list)) %>% 
-                                 group_by(id2, display_name) %>% 
-                                 mutate(row_marker = row_number()) %>% 
-                                 pivot_wider(names_from = c(display_name) ,values_from = c(second_list))
+                         }
+                         
+                         #extract pedal seconds
+                         pedal_seconds <- keep %>% select(id, seconds_since_pedaling_start)
+                         pedal_seconds <- pedal_seconds %>% unnest(cols=c(seconds_since_pedaling_start))
+                         
+                         #extract averages
+                         average_summaries <- keep %>% select(id, average_summaries) %>% unnest(cols = c(average_summaries)) %>% 
+                             mutate(display_name = sapply(average_summaries,'[[',1),
+                                    display_unit = sapply(average_summaries,'[[',2),
+                                    value = sapply(average_summaries,'[[',3)) %>% 
+                             select(-average_summaries) %>% 
+                             pivot_wider(names_from = display_name, values_from = c(value, display_unit))
+                         
+                         #extract summaries
+                         totals_summaries <- keep %>% select(id, summaries) %>% unnest(cols = c(summaries)) %>% 
+                             mutate(display_name = sapply(summaries,'[[',1),
+                                    display_unit = sapply(summaries,'[[',2),
+                                    value = sapply(summaries,'[[',3)) %>% 
+                             select(-summaries) %>% 
+                             pivot_wider(names_from = display_name, values_from = c(value, display_unit))
+                         
+                         #extract metrics
+                         metrics_summaries <- keep %>% select(id, metrics) %>% unnest(cols = c(metrics)) %>% 
+                             mutate(display_name = sapply(metrics,'[[',1),
+                                    second_list = sapply(metrics,'[[',5)) %>% 
+                             rename(id2 = id) %>% 
+                             select(-metrics) %>% 
+                             unnest(cols = c(second_list)) %>% 
+                             group_by(id2, display_name) %>% 
+                             mutate(row_marker = row_number()) %>% 
+                             pivot_wider(names_from = c(display_name) ,values_from = c(second_list))
+                         
+                         #post ride stats Plot
+                         output$summary <- renderPlot({
                              
                              #merge seconds with instantaneous stats
                              master_data <- cbind(pedal_seconds, metrics_summaries)
