@@ -42,8 +42,19 @@ tab1_content = dbc.Card(
         ),
     html.Div(html.P(id="message")),
     html.Div(html.P(id="password_viewer")),
+    html.Div(html.P(id="opening_message")),
     html.Div(dbc.Button("Calculate My Year", id="example-button", className="mr-2")),
-    html.Div(html.P(id="stats"))
+    #html.Div(html.P(id="stats"))
+    ]),
+    className="mt-3")
+
+
+tab2_content = dbc.Card(
+    dbc.CardBody(
+        [
+    html.Div(html.H1(id="user_message")),
+    html.Div(html.P(id="num_workouts")),
+    html.Div(html.P(id="pop_categories")),
     ]),
     className="mt-3")
 
@@ -54,8 +65,8 @@ app.layout = html.Div(children=[
     [
     dbc.Tabs(
                 [
-                    dbc.Tab(tab1_content,label="Tab 1", tab_id="tab-1"),
-                    dbc.Tab(label="Tab 2", tab_id="tab-2"),
+                    dbc.Tab(tab1_content,label="Account Info", tab_id="tab-1"),
+                    dbc.Tab(tab2_content, label="Workout Details", tab_id="tab-2"),
                 ],
                 id="card-tabs",
                 card=True,
@@ -63,6 +74,7 @@ app.layout = html.Div(children=[
             )
     ])])
 
+#function that returns data
 def getdata(value1,value2):
     s = requests.Session()
     user=value1
@@ -76,14 +88,19 @@ def getdata(value1,value2):
     apidata = s.get(me_url).json()
 
     #Flatten API response into a temporary dataframe
-    df_my_id = json_normalize(apidata, 'id', ['id'])
-    df_my_id_clean = df_my_id.iloc[0]
-    my_id = (df_my_id_clean.drop([0])).values.tolist()
+    #df_my_id = json_normalize(apidata, 'id', ['id'])
+    #df_my_id_clean = df_my_id.iloc[0]
+    #my_id = (df_my_id_clean.drop([0])).values.tolist()
+
+    df_my_id = pd.json_normalize(apidata)
+    #print(df_my_id)
+    df_my_id_clean = df_my_id[['id']]
+    my_id = (df_my_id_clean.iloc[0]['id'])
  
-    url = 'https://api.onepeloton.com/api/user/{}/workouts?joins=ride,ride.instructor&limit=250&page=0'.format(*my_id)
+    url = 'https://api.onepeloton.com/api/user/{}/workouts?joins=ride,ride.instructor&limit=250&page=0'.format(my_id)
     response = s.get(url)
     data = s.get(url).json()
-    df_workouts_raw = json_normalize(data['data'])
+    df_workouts_raw = pd.json_normalize(data['data'])
 
     '''Third API Call - GET Workout Metrics''' 
     #Create Dataframe of Workout IDs to run through our Loop
@@ -166,12 +183,41 @@ def getdata(value1,value2):
     df_peloton_final_stg['fixed_created_at'] = df_peloton_final_stg.apply(lambda row: convert_timestamps(row), axis=1)
     df_peloton_final_stg['fixed_start_time'] = df_peloton_final_stg.apply(lambda row: convert_timestamps2(row), axis=1)
     df_peloton_final_stg['fixed_end_time'] = df_peloton_final_stg.apply(lambda row: convert_timestamps3(row), axis=1)
-    #df_peloton_final_stg[['ride.length']]
+
+    #filter out year for 2020 only
+    df_peloton_final_stg = df_peloton_final_stg[(df_peloton_final_stg['created_at'])>=1577836800 & (df_peloton_final_stg['created_at']<1609459200)]  
+
+
+    return(df_peloton_final_stg,"Successfully got data... let's take a look at your year! Head to the next tab to get started", user)
+
+
+def numWorkouts(dt):
+    #total number of workouts
+    n = len(dt)
+
+    #most popular categories
+    dt2 = dt[['created_at', 'fitness_discipline']].groupby(['fitness_discipline']).agg({'fitness_discipline' :['count']})
+    dt2.columns = dt2.columns.droplevel(0)
+    dt2.reset_index(inplace=True)
+
+    if len(dt2)>2:
+        top = dt2.nlargest(3, 'count')
+        top = top['fitness_discipline'].tolist()
+        top_message = "In 2020, you diversified your workouts. Your most popular categories were {}, {}, and {}!".format(top[0], top[1], top[2])
+    elif len(dt2)==2:
+        top = dt2.nlargest(2, 'count')
+        top = top['fitness_discipline'].tolist()
+        top_message = "In 2020, you diversified your workouts. Your most popular categories were {} and {}!".format(top[0], top[1])
+    else:
+        top = dt2.nlargest(1, 'count')
+        top = top['fitness_discipline'].tolist()
+        top_message = "In 2020, your most popular category was {}!".format(top[0])
+
+    n = "You had a great year of working out, altogether you completed " + str(n) + " Peloton workouts, nice job!"
 
 
 
-    return(df_peloton_final_stg,"Successfully got data! Let's take a look at your year!")
-
+    return n, top_message
 
 @app.callback(
     Output("modal-centered", "is_open"),
@@ -192,16 +238,24 @@ def output_text(value):
     return("")
 
 @app.callback(
-    Output("stats", "children"),
+    [Output("opening_message", "children"),
+    Output("user_message", "children"),
+    Output("num_workouts", "children"),
+    Output("pop_categories", "children")],
     [Input("example-button", "n_clicks"),Input("input", "value"),Input("password", "value")]
 )
 def on_button_click(n, value1, value2):
     if n is None:
-        return("show me stats")
+        return("Click 'Calculate My Year' after inputting account info: we'll let you know when we get your data, it may take a few minutes!", "Unknown User", "No data yet.", "No data yet")
     else:
-        user_data, message = getdata(value1, value2)
-        return(str(user_data))
+        user_data, message, user = getdata(value1, value2)
 
+        number_workouts, popular_categories = numWorkouts(user_data)
+
+        user = "Welcome to your Peloton Wrapped, " + user + "."
+
+
+        return(message, user, number_workouts, popular_categories)
 
 if __name__ == '__main__':
     app.run_server(debug=True)
