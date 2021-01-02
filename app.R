@@ -20,16 +20,18 @@ ui <- fluidPage(
 
     # Application title
     titlePanel("Peloton Live Tracker"),
+    fluidRow(
+        column(textInput("username", "Peloton Username"), width = 4),
+        column(passwordInput("pw", "Peloton Password"), width = 4),
+        column(textInput("time", "How long is your workout (minutes)?"), width = 3),
+        column(actionButton(inputId = "SubmitButton",label = "Start"), width = 1, 
+               style = "display:flex;padding-top:25px;justify-content:center;align-items:center;"),
+        style = "background-color:#C34539;color:white;"
+    ),
 
     # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-            textInput("username", "Peloton Username"),
-            passwordInput("pw", "Peloton Password"),
-            textInput("time", "How long is your workout (minutes)?"),
-            actionButton(inputId = "SubmitButton",label = "Start"),
-        ),
-        mainPanel(
+    fluidRow(
+        column(width = 12,
         # Show a plot of the generated distribution
         tabsetPanel(type = "tabs",
                     tabPanel("Live Stats", plotOutput("distPlot")),
@@ -58,7 +60,7 @@ ui <- fluidPage(
         #   plotOutput("distPlot")
         #)
     )
-    )
+)
 )
 
 # Define server logic required to draw a histogram
