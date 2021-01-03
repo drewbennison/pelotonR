@@ -11,6 +11,10 @@ import json
 from pandas.io.json import json_normalize
 from functools import reduce
 import datetime
+from dash.dash import no_update
+
+
+user_data = pd.read_csv('drewdata.csv')
 
 external_stylesheets = [dbc.themes.BOOTSTRAP]
 app = dash.Dash(__name__,external_stylesheets=external_stylesheets)
@@ -42,21 +46,30 @@ tab1_content = dbc.Card(
         ),
     html.Div(html.P(id="message")),
     html.Div(html.P(id="password_viewer")),
-    html.Div(html.P(id="opening_message")),
     html.Div(dbc.Button("Calculate My Year", id="example-button", className="mr-2")),
-    #html.Div(html.P(id="stats"))
+    dbc.Spinner(html.Div(id="loading-output")),
+    html.Div(html.P(id="confirmation_message")),
     ]),
     className="mt-3")
-
 
 tab2_content = dbc.Card(
-    dbc.CardBody(
-        [
-    html.Div(html.H1(id="user_message")),
-    html.Div(html.P(id="num_workouts")),
-    html.Div(html.P(id="pop_categories")),
-    ]),
-    className="mt-3")
+    dbc.CardBody([
+    html.Div(html.H1("WOW! You killed this year... Let's look closer at what you achieved.",id="Title")),
+        html.Br(),
+         dbc.Row([
+            dbc.Col(
+                dbc.Card([
+                    html.Br(),
+                    html.Div(html.H4(id="total_rides")),
+                    html.Br(),
+                    html.Div(html.H4(id="total_calories")),
+                    html.Br(),
+                    html.Div(html.H4(id="fave_workout"))])),
+            dbc.Col(dbc.Card(dcc.Graph(id="workout_pie")))
+            ])
+         ])
+    )
+
 
 
 app.layout = html.Div(children=[
@@ -65,8 +78,8 @@ app.layout = html.Div(children=[
     [
     dbc.Tabs(
                 [
-                    dbc.Tab(tab1_content,label="Account Info", tab_id="tab-1"),
-                    dbc.Tab(tab2_content, label="Workout Details", tab_id="tab-2"),
+                    dbc.Tab(tab1_content,label="Get Started", tab_id="tab-1"),
+                    dbc.Tab(tab2_content,label="Reviewing 2020", tab_id="tab-2"),
                 ],
                 id="card-tabs",
                 card=True,
@@ -74,7 +87,6 @@ app.layout = html.Div(children=[
             )
     ])])
 
-#function that returns data
 def getdata(value1,value2):
     s = requests.Session()
     user=value1
@@ -88,19 +100,14 @@ def getdata(value1,value2):
     apidata = s.get(me_url).json()
 
     #Flatten API response into a temporary dataframe
-    #df_my_id = json_normalize(apidata, 'id', ['id'])
-    #df_my_id_clean = df_my_id.iloc[0]
-    #my_id = (df_my_id_clean.drop([0])).values.tolist()
-
-    df_my_id = pd.json_normalize(apidata)
-    #print(df_my_id)
-    df_my_id_clean = df_my_id[['id']]
-    my_id = (df_my_id_clean.iloc[0]['id'])
+    df_my_id = json_normalize(apidata, 'id', ['id'])
+    df_my_id_clean = df_my_id.iloc[0]
+    my_id = (df_my_id_clean.drop([0])).values.tolist()
  
-    url = 'https://api.onepeloton.com/api/user/{}/workouts?joins=ride,ride.instructor&limit=250&page=0'.format(my_id)
+    url = 'https://api.onepeloton.com/api/user/{}/workouts?joins=ride,ride.instructor&limit=250&page=0'.format(*my_id)
     response = s.get(url)
     data = s.get(url).json()
-    df_workouts_raw = pd.json_normalize(data['data'])
+    df_workouts_raw = json_normalize(data['data'])
 
     '''Third API Call - GET Workout Metrics''' 
     #Create Dataframe of Workout IDs to run through our Loop
@@ -183,79 +190,55 @@ def getdata(value1,value2):
     df_peloton_final_stg['fixed_created_at'] = df_peloton_final_stg.apply(lambda row: convert_timestamps(row), axis=1)
     df_peloton_final_stg['fixed_start_time'] = df_peloton_final_stg.apply(lambda row: convert_timestamps2(row), axis=1)
     df_peloton_final_stg['fixed_end_time'] = df_peloton_final_stg.apply(lambda row: convert_timestamps3(row), axis=1)
-
-    #filter out year for 2020 only
-    df_peloton_final_stg = df_peloton_final_stg[(df_peloton_final_stg['created_at'])>=1577836800 & (df_peloton_final_stg['created_at']<1609459200)]  
-
-
-    return(df_peloton_final_stg,"Successfully got data... let's take a look at your year! Head to the next tab to get started", user)
-
-
-def numWorkouts(dt):
-    #total number of workouts
-    n = len(dt)
-
-    #most popular categories
-    dt2 = dt[['created_at', 'fitness_discipline']].groupby(['fitness_discipline']).agg({'fitness_discipline' :['count']})
-    dt2.columns = dt2.columns.droplevel(0)
-    dt2.reset_index(inplace=True)
-
-    if len(dt2)>2:
-        top = dt2.nlargest(3, 'count')
-        top = top['fitness_discipline'].tolist()
-        top_message = "In 2020, you diversified your workouts. Your most popular categories were {}, {}, and {}!".format(top[0], top[1], top[2])
-    elif len(dt2)==2:
-        top = dt2.nlargest(2, 'count')
-        top = top['fitness_discipline'].tolist()
-        top_message = "In 2020, you diversified your workouts. Your most popular categories were {} and {}!".format(top[0], top[1])
-    else:
-        top = dt2.nlargest(1, 'count')
-        top = top['fitness_discipline'].tolist()
-        top_message = "In 2020, your most popular category was {}!".format(top[0])
-
-    n = "You had a great year of working out, altogether you completed " + str(n) + " Peloton workouts, nice job!"
+    #df_peloton_final_stg[['ride.length']]
 
 
 
-    return n, top_message
+    return(df_peloton_final_stg,"Successfully got data! Let's take a look at your year!")
+
 
 @app.callback(
     Output("modal-centered", "is_open"),
     [Input("open-centered", "n_clicks"), Input("close-centered", "n_clicks")],
-    [State("modal-centered", "is_open")],
-)
+    [State("modal-centered", "is_open")])
+
 def toggle_modal(n1, n2, is_open):
     if n1 or n2:
         return not is_open
     return is_open
 
-@app.callback(Output("message", "children"), [Input("input", "value")])
-def output_text(value):
-    return("")
-
-@app.callback(Output("password_viewer", "children"), [Input("password", "value")])
-def output_text(value):
-    return("")
-
 @app.callback(
-    [Output("opening_message", "children"),
-    Output("user_message", "children"),
-    Output("num_workouts", "children"),
-    Output("pop_categories", "children")],
+    [Output("confirmation_message", "children"),Output("total_rides","children"),Output("total_calories","children"),Output("fave_workout","children"),Output("loading-output", "children"),Output("workout_pie","figure")],
     [Input("example-button", "n_clicks"),Input("input", "value"),Input("password", "value")]
 )
 def on_button_click(n, value1, value2):
     if n is None:
-        return("Click 'Calculate My Year' after inputting account info: we'll let you know when we get your data, it may take a few minutes!", "Unknown User", "No data yet.", "No data yet")
+        return no_update
     else:
-        user_data, message, user = getdata(value1, value2)
+        total_rides_message = get_total_rides(user_data)
+        total_cals_message = get_total_calories(user_data)
+        fave_message = get_fave_workout(user_data)
+        pie = make_pie(user_data)
+        return('Year has been generated! Check out your Peloton Year In Review using the tabs.', total_rides_message, total_cals_message,fave_message,"",pie)
 
-        number_workouts, popular_categories = numWorkouts(user_data)
+def get_total_rides(data):
+    total_rides = len(data)
+    total_rides_message = "You rode " + str(total_rides) + " rides this year, you were on FIRE!"
+    return total_rides_message
 
-        user = "Welcome to your Peloton Wrapped, " + user + "."
+def get_total_calories(data):
+    total_cals = data['Calories'].sum()
+    total_cals_message = "You burned " + str(total_cals) + " calories in 2020."
+    return total_cals_message
 
+def get_fave_workout(data):
+    fave = data['workout_type'].value_counts().idxmax()
+    fave_message = "Your favorite workout type was " + str(fave) + ". Good choice :-)"
+    return fave_message
 
-        return(message, user, number_workouts, popular_categories)
+def make_pie(data):
+    fig = px.pie(data, title="Workout Types for 2020",template='seaborn',values=data['workout_type'].value_counts(), names=data.workout_type.unique())
+    return fig
 
 if __name__ == '__main__':
     app.run_server(debug=True)
