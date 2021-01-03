@@ -294,7 +294,7 @@ def get_total_calories(data):
     total_cals = data['Calories'].sum()
     total_time = data['workout_length'].sum()
     total_time = round(total_time/60)
-    total_cals_message = "You worked out for " + str(total_time) + " minutes this year, and along the way you burned " + str(round(total_cals)) + " calories in 2020."
+    total_cals_message = "You worked out for " + str(total_time) + " minutes this year (that's " + str(round((total_time/60/24),2)) + " days) and along the way you burned " + str(round(total_cals)) + " calories in 2020."
     return total_cals_message
 
 def make_pie(data):
