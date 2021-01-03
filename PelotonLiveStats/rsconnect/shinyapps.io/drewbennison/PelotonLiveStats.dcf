@@ -1,0 +1,12 @@
+name: PelotonLiveStats
+title: PelotonLiveStats
+username:
+account: drewbennison
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3436458
+bundleId: 4051963
+url: https://drewbennison.shinyapps.io/PelotonLiveStats/
+when: 1609635342.75491
+asMultiple: FALSE
+asStatic: FALSE
