@@ -16,45 +16,47 @@ from dash.dash import no_update
 
 #user_data = pd.read_csv('drewdata.csv')
 
-external_stylesheets = [dbc.themes.BOOTSTRAP]
+#CHANGED THEME TO DARK ******
+external_stylesheets = [dbc.themes.DARKLY]
 app = dash.Dash(__name__,external_stylesheets=external_stylesheets)
 
 # assume you have a "long-form" data frame
 
-tab1_content = dbc.Card(
-    dbc.CardBody(
-        [
-        dbc.Button("Enter Account Info", id="open-centered"),
-        dbc.Modal(
-            [
-                dbc.ModalHeader("Enter your Information Below"),
-                dbc.ModalBody(html.Div([
-                    dbc.Input(id="input", placeholder="username...", type="text"),
-                    html.Br(),
-                    dbc.Input(id="password", placeholder="password...", type="text")
+tab1_content = html.Div([
+                    html.Div([
+                        html.Br(),
+                        html.Br(),
+                        #these two H2 and H5 are new (and the breaks)
+                        html.H2("ONE. YEAR. GREATER.",style={"text-align":"center"}),
+                        html.H5("You worked hard this year. Own it. Use this web application to see your Peloton Stats for 2020.",style={"text-align":"center"}),
+                        html.Br(),
+                        html.Div([
+                            dbc.Button("Enter Account Info", id="open-centered"),
+                            dbc.Modal([dbc.ModalHeader("Enter your Information Below"),dbc.ModalBody(
+                                html.Div([
+                                    dbc.Input(id="input", placeholder="username...", type="text"),
+                                    html.Br(),
+                                    dbc.Input(id="password", placeholder="password...", type="text")]
+                                    )
+                                ),
+                            dbc.ModalFooter(
+                                dbc.Button("Submit", id="close-centered", className="ml-auto")
+                                )],id="modal-centered",centered=True),
+                        html.Div(html.P(id="message")),
+                        html.Div(html.P(id="password_viewer")),
+                        html.Div(
+                            dbc.Button("Calculate My Year", id="example-button", className="mr-2")),
+                            dbc.Spinner(html.Div(id="loading-output")),
+                            html.Br(),
+                            html.P(id="confirmation_message")],style={"text-align":"center"})],
+                    style={"width": "100%","height": "100%"})],
+                style={"width": "100%","height": "600px","background-image":'url("https://peloton.shorthandstories.com/how-hiit-hits-different-on-the-bike--tread-and-floor/assets/RNqFtnNyb0/olivia_hiit-ride_oz.gif")'})
 
-                ]
-            )),
-                dbc.ModalFooter(
-                    dbc.Button(
-                        "Submit", id="close-centered", className="ml-auto"
-                    )
-                ),
-            ],
-            id="modal-centered",
-            centered=True,
-        ),
-    html.Div(html.P(id="message")),
-    html.Div(html.P(id="password_viewer")),
-    html.Div(dbc.Button("Calculate My Year", id="example-button", className="mr-2")),
-    dbc.Spinner(html.Div(id="loading-output")),
-    html.Div(html.P(id="confirmation_message")),
-    ]),
-    className="mt-3")
+
 
 tab2_content = dbc.Card(
     dbc.CardBody([
-    html.Div(html.H1(id="Title")),
+    html.Div(html.H2(id="Title")),
         html.Br(),
          dbc.Row([
             dbc.Col(
@@ -66,28 +68,32 @@ tab2_content = dbc.Card(
                     html.Br(),
                     html.Div(html.H4(id="fave_workout")),
                     html.Br(),
-                    html.Div(html.H4(id="favorite_instructors"))])),
-            dbc.Col(dbc.Card(dcc.Graph(id="workout_pie")))
+                    html.Div(html.H4(id="favorite_instructors"))], outline=True), width=7),
+            dbc.Col(dbc.Card([html.Br(),html.H3("Your Workout Types of 2020"),dcc.Graph(id="workout_pie")]),width=5)
             ])
          ])
     )
 
+tab3_content = html.Div([html.P("This will be the cycling tab.")])
 
 
 app.layout = html.Div(children=[
-    html.H1(children='PELETON YEAR IN REVIEW'),
-    html.Div(
-    [
-    dbc.Tabs(
-                [
-                    dbc.Tab(tab1_content,label="Get Started", tab_id="tab-1"),
-                    dbc.Tab(tab2_content,label="Reviewing 2020", tab_id="tab-2"),
-                ],
-                id="card-tabs",
-                card=True,
-                active_tab="tab-1",
-            )
-    ])])
+     html.Div([
+        html.Div(html.Img(
+            src="https://from128.com/images/peloton-logo-trans.png",style={'height':'7%', 'width':'7%','padding': '10px 0px 12px 0px'}),
+            style={'width': '10%', 'display': 'inline'}),
+        html.Div(html.H1(children='PELOTON YEAR IN REVIEW'),style={'width': '90%', 'display': 'inline-block','text-align':'left','padding': '0px 0px 10px 0px','vertical-align':'bottom'}),
+        ]),
+    html.Div([
+        dbc.Tabs([
+            dbc.Tab(tab1_content,label="Get Started", tab_id="tab-1"),
+            dbc.Tab(tab2_content,label="Reviewing 2020", tab_id="tab-2"),
+            dbc.Tab(tab3_content,label="line chart",tab_id="tab-3")],
+            id="card-tabs",
+            card=False,
+            active_tab="tab-1")]
+        )]
+    )
 
 def getdata(value1,value2):
     s = requests.Session()
@@ -303,7 +309,21 @@ def make_pie(data):
     dt2.columns = dt2.columns.droplevel(0)
     dt2.reset_index(inplace=True)
 
-    fig = px.pie(dt2, title="Workout Types for 2020",template='seaborn',values='count', names='fitness_discipline')
+    fig = px.pie(dt2, title="Workout Types for 2020",template='seaborn',values='count', names='fitness_discipline',color_discrete_sequence=px.colors.sequential.RdBu)
+
+    fig.update_traces(textposition='inside', textinfo='label')
+    fig.update_layout(showlegend=False,paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(0,0,0,0)')
+    fig.update_layout(
+    font_color="white",
+    title_font_color="white")
+    #303030
+    most = data['fitness_discipline'].value_counts().idxmax()
+    most_message = "sensing a " +str(most)+ " buff over here....."
+    fig.add_annotation(x=.5, y=-.2,
+            text=str("sensing a "+ str(most)+ " buff over here....."),
+            showarrow=False,font=dict(size=16))
+
     return fig
 
 if __name__ == '__main__':
