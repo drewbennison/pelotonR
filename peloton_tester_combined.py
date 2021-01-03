@@ -64,7 +64,9 @@ tab2_content = dbc.Card(
                     html.Br(),
                     html.Div(html.H4(id="total_calories")),
                     html.Br(),
-                    html.Div(html.H4(id="fave_workout"))])),
+                    html.Div(html.H4(id="fave_workout")),
+                    html.Br(),
+                    html.Div(html.H4(id="favorite_instructors"))])),
             dbc.Col(dbc.Card(dcc.Graph(id="workout_pie")))
             ])
          ])
@@ -104,7 +106,7 @@ def getdata(value1,value2):
     df_my_id_clean = df_my_id[['id']]
     my_id = (df_my_id_clean.iloc[0]['id'])
  
-    url = 'https://api.onepeloton.com/api/user/{}/workouts?joins=ride,ride.instructor&limit=250&page=0'.format(my_id)
+    url = 'https://api.onepeloton.com/api/user/{}/workouts?joins=ride,ride.instructor&limit=1000&page=0'.format(my_id)
     response = s.get(url)
     data = s.get(url).json()
     df_workouts_raw = pd.json_normalize(data['data'])
@@ -190,6 +192,7 @@ def getdata(value1,value2):
     df_peloton_final_stg['fixed_created_at'] = df_peloton_final_stg.apply(lambda row: convert_timestamps(row), axis=1)
     df_peloton_final_stg['fixed_start_time'] = df_peloton_final_stg.apply(lambda row: convert_timestamps2(row), axis=1)
     df_peloton_final_stg['fixed_end_time'] = df_peloton_final_stg.apply(lambda row: convert_timestamps3(row), axis=1)
+    df_peloton_final_stg['workout_length'] = df_peloton_final_stg['end_time'] - df_peloton_final_stg['start_time']
     #df_peloton_final_stg[['ride.length']]
 
     #filter out year for 2020 only
@@ -211,7 +214,9 @@ def toggle_modal(n1, n2, is_open):
     return is_open
 
 @app.callback(
-    [Output("confirmation_message", "children"), Output("Title", "children"), Output("total_rides","children"),Output("total_calories","children"),Output("fave_workout","children"),Output("loading-output", "children"),Output("workout_pie","figure")],
+    [Output("confirmation_message", "children"), Output("Title", "children"), Output("total_rides","children"),
+    Output("total_calories","children"),Output("fave_workout","children"),Output("loading-output", "children"),Output("workout_pie","figure"),
+    Output("favorite_instructors", "children")],
     [Input("example-button", "n_clicks"),Input("input", "value"),Input("password", "value")]
 )
 def on_button_click(n, value1, value2):
@@ -223,8 +228,10 @@ def on_button_click(n, value1, value2):
         total_workouts_message, fave_message = numWorkouts(user_data)
         total_cals_message = get_total_calories(user_data)
         pie = make_pie(user_data)
+        combined_message = favoriteInstructor(user_data)
         return('Year has been generated! Check out your Peloton Year In Review using the tabs.',
-            user_welcome, total_workouts_message, total_cals_message,fave_message,"",pie)
+            user_welcome, total_workouts_message, total_cals_message,fave_message,"",pie,
+            combined_message)
 
 def numWorkouts(dt):
     #total number of workouts
@@ -254,13 +261,49 @@ def numWorkouts(dt):
 
     return n, top_message
 
+
+def favoriteInstructor(dt):
+    #most popular categories
+    dt2 = dt[['created_at', 'ride.instructor.name']].groupby(['ride.instructor.name']).agg({'ride.instructor.name' :['count']})
+    dt2.columns = dt2.columns.droplevel(0)
+    dt2.reset_index(inplace=True)
+
+    n = len(dt2)
+
+    if len(dt2)>2:
+        top = dt2.nlargest(3, 'count')
+        top = top['ride.instructor.name'].tolist()
+        top_message = "Your go to instructors were {}, {}, and {}.".format(top[0], top[1], top[2])
+        n = "You completed workouts with {} different instructors this year.".format(n)
+    elif len(dt2)==2:
+        top = dt2.nlargest(2, 'count')
+        top = top['ride.instructor.name'].tolist()
+        top_message = "Your go to instructors were {} and {}.".format(top[0], top[1])
+        n = "You completed workouts with {} different instructors this year.".format(n)
+    else:
+        top = dt2.nlargest(1, 'count')
+        top = top['ride.instructor.name'].tolist()
+        top_message = "But if something works, why change, right? Your favorite instructor (and only instructor) was {}.".format(top[0])
+        n = "You completed workouts with only one instructor this year...I'm guessing you're a fan?"
+
+    combined_message = n + " " + top_message
+    return combined_message
+
+
 def get_total_calories(data):
     total_cals = data['Calories'].sum()
-    total_cals_message = "You burned " + str(round(total_cals)) + " calories in 2020."
+    total_time = data['workout_length'].sum()
+    total_time = round(total_time/60)
+    total_cals_message = "You worked out for " + str(total_time) + " minutes this year, and along the way you burned " + str(round(total_cals)) + " calories in 2020."
     return total_cals_message
 
 def make_pie(data):
-    fig = px.pie(data, title="Workout Types for 2020",template='seaborn',values=data['fitness_discipline'].value_counts(), names=data.fitness_discipline.unique())
+    #most popular categories
+    dt2 = data[['created_at', 'fitness_discipline']].groupby(['fitness_discipline']).agg({'fitness_discipline' :['count']})
+    dt2.columns = dt2.columns.droplevel(0)
+    dt2.reset_index(inplace=True)
+
+    fig = px.pie(dt2, title="Workout Types for 2020",template='seaborn',values='count', names='fitness_discipline')
     return fig
 
 if __name__ == '__main__':
