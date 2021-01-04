@@ -379,58 +379,62 @@ server <- function(input, output) {
                                     WOW_avg_output = scales::percent((avg_weekly_output - lag(avg_weekly_output, n = 1L)) / lag(avg_weekly_output, n = 1L), accuracy = .1),
                                     WOW_workout_diff = workout_count - lag(workout_count))
                          
-                         welcome_message <- paste0("Hi, ", if_else(is.na(me$first_name)==T | me$first_name == "", me$username, me$first_name),
-                                                   ". You have done ", case_when(week_sum_stats[2,"WOW_workout_diff"] > 0 ~ paste0(week_sum_stats[2,"WOW_workout_diff"], " more "),
-                                                                                 week_sum_stats[2,"WOW_workout_diff"] == 0 ~ paste0(" the same number of "),
-                                                                                 week_sum_stats[2,"WOW_workout_diff"] < 0 ~ paste0(abs(week_sum_stats[2,"WOW_workout_diff"]), " less ")
-                                                   ), 
-                                                   if_else(week_sum_stats[2,"WOW_workout_diff"] == 1 | week_sum_stats[2,"WOW_workout_diff"] == -1, "workout this week compared to this time last week.", "workouts this week compared to this time last week."))
-                         
-                         output$welcome_message <- renderUI(h2(welcome_message))
-                         
-                         total_output_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_output)
-                         total_cals_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_cals)
-                         total_distance_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_distance)
-                         avg_output_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_avg_output)
-                         
-                         output$wow_total_output <- renderUI(h3(total_output_diff, style = paste0("color:", if_else(total_output_diff > 0, "green;", "red;"))))
-                         output$wow_total_distance <- renderUI(h3(total_distance_diff, style = paste0("color:", if_else(total_distance_diff > 0, "green;", "red;"))))
-                         output$wow_total_cals <- renderUI(h3(total_cals_diff, style = paste0("color:", if_else(total_cals_diff > 0, "green;", "red;"))))
-                         output$wow_avg_output <- renderUI(h3(avg_output_diff, style = paste0("color:", if_else(avg_output_diff > 0, "green;", "red;"))))
-                         
-                         output$wow_total_output_arrow <- renderImage({
-                             list(src = if_else(total_output_diff > 0, "www/green_up_arrow.jpg", "www/red_down_arrow.png"),
-                                  alt = if_else(total_output_diff > 0, "Green Up Arrow", "Red Down Arrow"),
-                                  height = "50px",
-                                  width = "50px"
-                             )
-                         }, deleteFile = FALSE)
-                         
-                         output$wow_total_distance_arrow <- renderImage({
-                             list(src = if_else(total_distance_diff > 0, "www/green_up_arrow.jpg", "www/red_down_arrow.png"),
-                                  alt = if_else(total_distance_diff > 0, "Green Up Arrow", "Red Down Arrow"),
-                                  height = "50px",
-                                  width = "50px"
-                             )
-                         }, deleteFile = FALSE)
-                         
-                         output$wow_total_cals_arrow <- renderImage({
-                             list(src = if_else(total_cals_diff > 0, "www/green_up_arrow.jpg", "www/red_down_arrow.png"),
-                                  alt = if_else(total_cals_diff > 0, "Green Up Arrow", "Red Down Arrow"),
-                                  height = "50px",
-                                  width = "50px"
-                             )
-                         }, deleteFile = FALSE)
-                         
-                         output$wow_avg_output_arrow <- renderImage({
-                             list(src = if_else(avg_output_diff > 0, "www/green_up_arrow.jpg", "www/red_down_arrow.png"),
-                                  alt = if_else(avg_output_diff > 0, "Green Up Arrow", "Red Down Arrow"),
-                                  height = "50px",
-                                  width = "50px"
-                             )
-                         }, deleteFile = FALSE)
-                         
-                     }
+                         if(nrow(week_sum_stats) <2) {
+                             welcome_message <- paste0("Hi, ", if_else(is.na(me$first_name)==T | me$first_name == "", me$username, me$first_name), " we need two weeks of at least one cycling workout to calculate the rest of your data.")
+                             output$welcome_message <- renderUI(h2(welcome_message))
+                         } else {
+                             welcome_message <- paste0("Hi, ", if_else(is.na(me$first_name)==T | me$first_name == "", me$username, me$first_name),
+                                                       ". You have done ", case_when(week_sum_stats[2,"WOW_workout_diff"] > 0 ~ paste0(week_sum_stats[2,"WOW_workout_diff"], " more "),
+                                                                                     week_sum_stats[2,"WOW_workout_diff"] == 0 ~ paste0(" the same number of "),
+                                                                                     week_sum_stats[2,"WOW_workout_diff"] < 0 ~ paste0(abs(week_sum_stats[2,"WOW_workout_diff"]), " less ")
+                                                       ), 
+                                                       if_else(week_sum_stats[2,"WOW_workout_diff"] == 1 | week_sum_stats[2,"WOW_workout_diff"] == -1, "workout this week compared to this time last week.", "workouts this week compared to this time last week."))
+                             
+                             output$welcome_message <- renderUI(h2(welcome_message))
+                             
+                             total_output_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_output)
+                             total_cals_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_cals)
+                             total_distance_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_total_distance)
+                             avg_output_diff <- week_sum_stats %>% filter(week_num == isoweek(today())) %>% pull(WOW_avg_output)
+                             
+                             output$wow_total_output <- renderUI(h3(total_output_diff, style = paste0("color:", if_else(total_output_diff > 0, "green;", "red;"))))
+                             output$wow_total_distance <- renderUI(h3(total_distance_diff, style = paste0("color:", if_else(total_distance_diff > 0, "green;", "red;"))))
+                             output$wow_total_cals <- renderUI(h3(total_cals_diff, style = paste0("color:", if_else(total_cals_diff > 0, "green;", "red;"))))
+                             output$wow_avg_output <- renderUI(h3(avg_output_diff, style = paste0("color:", if_else(avg_output_diff > 0, "green;", "red;"))))
+                             
+                             output$wow_total_output_arrow <- renderImage({
+                                 list(src = if_else(total_output_diff > 0, "www/green_up_arrow.jpg", "www/red_down_arrow.png"),
+                                      alt = if_else(total_output_diff > 0, "Green Up Arrow", "Red Down Arrow"),
+                                      height = "50px",
+                                      width = "50px"
+                                 )
+                             }, deleteFile = FALSE)
+                             
+                             output$wow_total_distance_arrow <- renderImage({
+                                 list(src = if_else(total_distance_diff > 0, "www/green_up_arrow.jpg", "www/red_down_arrow.png"),
+                                      alt = if_else(total_distance_diff > 0, "Green Up Arrow", "Red Down Arrow"),
+                                      height = "50px",
+                                      width = "50px"
+                                 )
+                             }, deleteFile = FALSE)
+                             
+                             output$wow_total_cals_arrow <- renderImage({
+                                 list(src = if_else(total_cals_diff > 0, "www/green_up_arrow.jpg", "www/red_down_arrow.png"),
+                                      alt = if_else(total_cals_diff > 0, "Green Up Arrow", "Red Down Arrow"),
+                                      height = "50px",
+                                      width = "50px"
+                                 )
+                             }, deleteFile = FALSE)
+                             
+                             output$wow_avg_output_arrow <- renderImage({
+                                 list(src = if_else(avg_output_diff > 0, "www/green_up_arrow.jpg", "www/red_down_arrow.png"),
+                                      alt = if_else(avg_output_diff > 0, "Green Up Arrow", "Red Down Arrow"),
+                                      height = "50px",
+                                      width = "50px"
+                                 )
+                             }, deleteFile = FALSE)
+                             
+                         }}
                  })
     
     
