@@ -379,7 +379,7 @@ server <- function(input, output) {
                                     WOW_avg_output = scales::percent((avg_weekly_output - lag(avg_weekly_output, n = 1L)) / lag(avg_weekly_output, n = 1L), accuracy = .1),
                                     WOW_workout_diff = workout_count - lag(workout_count))
                          
-                         if(nrow(week_sum_stats) <2) {
+                         if(nrow(week_sum_stats) <1) {
                              welcome_message <- paste0("Hi, ", if_else(is.na(me$first_name)==T | me$first_name == "", me$username, me$first_name), " we need two weeks of at least one cycling workout to calculate the rest of your data.")
                              output$welcome_message <- renderUI(h2(welcome_message))
                          } else {
