@@ -1,4 +1,4 @@
-# pelotonR
+# peloton api apps
 This repository contains a collection of scripts for working with the Peloton API. 
 
 The main script is app.R which contains a Shiny App to display:
