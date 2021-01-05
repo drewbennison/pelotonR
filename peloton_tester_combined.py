@@ -62,7 +62,7 @@ tab2_content = dbc.Card(
             dbc.Col(
                 dbc.Card([
                     html.Br(),
-                    html.Div(html.H4(id="total_rides")),
+                    html.Div(html.H4(id="total_workouts")),
                     html.Br(),
                     html.Div(html.H4(id="total_calories")),
                     html.Br(),
@@ -74,7 +74,23 @@ tab2_content = dbc.Card(
          ])
     )
 
-tab3_content = html.Div([html.P("This will be the cycling tab.")])
+tab3_content = dbc.Card(
+    dbc.CardBody([
+    html.Div(html.H2(id="Cycling Stats")),
+        html.Br(),
+         dbc.Row([
+            dbc.Col(
+                dbc.Card([
+                    html.Br(),
+                    html.Div(html.H4(id="cycling-total-rides")),
+                    html.Br(),
+                    html.Div(html.H4(id="cycling-total-distance")),
+                    html.Br(),
+                    html.Div(html.H4(id="cycling-total-output")),
+                    ], outline=True), width=7),
+            ])
+         ])
+    )
 
 
 app.layout = html.Div(children=[
@@ -88,7 +104,7 @@ app.layout = html.Div(children=[
         dbc.Tabs([
             dbc.Tab(tab1_content,label="Get Started", tab_id="tab-1"),
             dbc.Tab(tab2_content,label="Reviewing 2020", tab_id="tab-2"),
-            dbc.Tab(tab3_content,label="line chart",tab_id="tab-3")],
+            dbc.Tab(tab3_content,label="Cycling Stats",tab_id="tab-3")],
             id="card-tabs",
             card=False,
             active_tab="tab-1")]
@@ -130,7 +146,8 @@ def getdata(value1,value2):
     df_avg_metrics = pd.DataFrame([])
 
     for workout_id in workout_ids2:
-         response2 = s.get('https://api.onepeloton.com/api/workout/{}/performance_graph?every_n=300'.format(workout_id))
+        #can we get away with an every_n that is very large?
+         response2 = s.get('https://api.onepeloton.com/api/workout/{}/performance_graph?every_n=1800'.format(workout_id))
          data2 = response2.json()
          #Flatten API response into a temporary dataframe - exception handling because each workout type has a 
          #different structure to the API response, with different metrics.  Additionally, this call also generates
@@ -201,8 +218,9 @@ def getdata(value1,value2):
     df_peloton_final_stg['workout_length'] = df_peloton_final_stg['end_time'] - df_peloton_final_stg['start_time']
     #df_peloton_final_stg[['ride.length']]
 
-    #filter out year for 2020 only
-    df_peloton_final_stg = df_peloton_final_stg[(df_peloton_final_stg['created_at'])>=1577836800 & (df_peloton_final_stg['created_at']<1609459200)]  
+    #filter out year for 2020 only - I'm not sure if this works
+    df_peloton_final_stg = df_peloton_final_stg[df_peloton_final_stg.created_at>=1577836800]
+    df_peloton_final_stg = df_peloton_final_stg[df_peloton_final_stg.created_at<1609477200]
 
     user = "WOW! You killed it this year, {}... let's look closer at what you achieved.".format(user)
 
@@ -220,9 +238,10 @@ def toggle_modal(n1, n2, is_open):
     return is_open
 
 @app.callback(
-    [Output("confirmation_message", "children"), Output("Title", "children"), Output("total_rides","children"),
+    [Output("confirmation_message", "children"), Output("Title", "children"), Output("total_workouts","children"),
     Output("total_calories","children"),Output("fave_workout","children"),Output("loading-output", "children"),Output("workout_pie","figure"),
-    Output("favorite_instructors", "children")],
+    Output("favorite_instructors", "children"), Output("cycling-total-rides", "children"), Output("cycling-total-distance", "children"),
+    Output("cycling-total-output", "children")],
     [Input("example-button", "n_clicks"),Input("input", "value"),Input("password", "value")]
 )
 def on_button_click(n, value1, value2):
@@ -231,13 +250,16 @@ def on_button_click(n, value1, value2):
     else:
         user_data, user_data_message, user_welcome = getdata(value1, value2)
 
+        rides_message, total_distance, total_output = get_cycling_stats(user_data)
+
+
         total_workouts_message, fave_message = numWorkouts(user_data)
         total_cals_message = get_total_calories(user_data)
         pie = make_pie(user_data)
         combined_message = favoriteInstructor(user_data)
         return('Year has been generated! Check out your Peloton Year In Review using the tabs.',
             user_welcome, total_workouts_message, total_cals_message,fave_message,"",pie,
-            combined_message)
+            combined_message, rides_message, total_distance, total_output)
 
 def numWorkouts(dt):
     #total number of workouts
@@ -325,6 +347,26 @@ def make_pie(data):
             showarrow=False,font=dict(size=16))
 
     return fig
+
+
+def get_cycling_stats(data):
+    cycling_workouts = data[data.fitness_discipline == "cycling"]
+
+    if len(cycling_workouts) == 0:
+        #no cycling workouts
+        return "Looks like you didn't complete any rides this year...no problem!", ""
+
+    else:
+        rides_message = "You completed {} cycling workouts this year...".format(len(cycling_workouts))
+
+        total_output = round(data['Total Output'].sum())
+        total_iphone_charges = round((total_output*.0002777777/2), 1)
+
+        total_distance = "...rode for {} miles...".format(str( round(data['Distance'].sum(),1)))
+        total_output = "...had a total output of {} Kilojoules  (that's enough to charge your iphone {} times)".format(str(total_output), total_iphone_charges)
+
+
+        return rides_message, total_distance, total_output
 
 if __name__ == '__main__':
     app.run_server(debug=True)
