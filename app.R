@@ -97,17 +97,27 @@ server <- function(input, output) {
                              
                              all_cycle_workouts <- tibble()
                              if (n_workouts > 0) {
-                                 #for(i in c(2:n_workouts)) # for total stats
-                                 for(i in c(2:10)) { # for live stats
-                                     temp_workouts <- parse_list_to_df(workouts$content$data[[i]])
-                                     if (temp_workouts$fitness_discipline == "cycling") {
-                                         cycling_workout <- temp_workouts %>% 
-                                             mutate(end_time = as.character(end_time))
-                                         all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
-                                                                         fill = TRUE)
-                                         
-                                     }
+                                 cycle_workouts_recieved <- 0
+                                 start_looking_at <- 1
+                                 while(cycle_workouts_recieved<1) {
+                                                    temp_workouts <- parse_list_to_df(workouts$content$data[[start_looking_at]])
+                                    if (temp_workouts$fitness_discipline == "cycling") {
+                                        cycling_workout <- temp_workouts %>% 
+                                            mutate(end_time = as.character(end_time))
+                                        all_cycle_workouts <- rbindlist(list(all_cycle_workouts, cycling_workout), use.names=TRUE,
+                                                                        fill = TRUE)
+                                        cycle_workouts_recieved <- cycle_workouts_recieved + 1
+                                        
+                                    } else {
+                                        start_looking_at <- start_looking_at + 1
+                                        if(start_looking_at>n_workouts) {
+                                            x <- ggplot() + annotate("text", x = input$time, y = 100, label = "CAN'T CALCULATE LIVE RIDE DATA AT THIS TIME") +
+                                                labs(x="", y="")
+                                            x
+                                        }
+                                    }
                                  }
+                                 
                                  #get current workout
                                  temp_workouts <- parse_list_to_df(workouts$content$data[[1]])
                                  if(temp_workouts$fitness_discipline == "cycling" && temp_workouts$has_pedaling_metrics==TRUE) {
@@ -248,7 +258,7 @@ server <- function(input, output) {
                          keep <- tibble()
                          for(i in c(1:length(workout_ids))) {
                              message(i)
-                             test <- get_perfomance_graphs(workout_ids[i], every_n = 10)
+                             test <- get_perfomance_graphs(workout_ids[i], every_n = 1800)
                              if(is.na(test$seconds_since_pedaling_start)==FALSE) {
                                  keep <- rbindlist(list(keep, test), use.names = TRUE, fill = TRUE)
                              }
@@ -379,8 +389,10 @@ server <- function(input, output) {
                                     WOW_avg_output = scales::percent((avg_weekly_output - lag(avg_weekly_output, n = 1L)) / lag(avg_weekly_output, n = 1L), accuracy = .1),
                                     WOW_workout_diff = workout_count - lag(workout_count))
                          
-                         if(nrow(week_sum_stats) <1) {
-                             welcome_message <- paste0("Hi, ", if_else(is.na(me$first_name)==T | me$first_name == "", me$username, me$first_name), " we need two weeks of at least one cycling workout to calculate the rest of your data.")
+                         check_weeks <- week_sum_stats %>% group_by(week_num) %>% count()
+                         
+                         if(nrow(check_weeks) <2) {
+                             welcome_message <- paste0("Hi, ", if_else(is.na(me$first_name)==T | me$first_name == "", me$username, me$first_name), ", we don't have enough data to calculate your week over week stats just yet...check back after some more workouts!")
                              output$welcome_message <- renderUI(h2(welcome_message))
                          } else {
                          welcome_message <- paste0("Hi, ", if_else(is.na(me$first_name)==T | me$first_name == "", me$username, me$first_name),
