@@ -98,8 +98,8 @@ server <- function(input, output) {
                              all_cycle_workouts <- tibble()
                              if (n_workouts > 0) {
                                  cycle_workouts_recieved <- 0
-                                 start_looking_at <- 1
-                                 while(cycle_workouts_recieved<1) {
+                                 start_looking_at <- 2
+                                 while(cycle_workouts_recieved<2) {
                                      temp_workouts <- parse_list_to_df(workouts$content$data[[start_looking_at]])
                                      if (temp_workouts$fitness_discipline == "cycling") {
                                          cycling_workout <- temp_workouts %>% 
