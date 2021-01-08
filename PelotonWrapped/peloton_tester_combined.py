@@ -87,6 +87,10 @@ tab3_content = dbc.Card(
                     html.Div(html.H4(id="cycling-total-distance")),
                     html.Br(),
                     html.Div(html.H4(id="cycling-total-output")),
+                    html.Br(),
+                    html.Div(html.H4(id="cycling-total-time")),
+                    html.Br(),
+                    html.Div(html.H4(id="cycling-long-ride")),
                     ], outline=True), width=7),
             ])
          ])
@@ -241,7 +245,7 @@ def toggle_modal(n1, n2, is_open):
     [Output("confirmation_message", "children"), Output("Title", "children"), Output("total_workouts","children"),
     Output("total_calories","children"),Output("fave_workout","children"),Output("loading-output", "children"),Output("workout_pie","figure"),
     Output("favorite_instructors", "children"), Output("cycling-total-rides", "children"), Output("cycling-total-distance", "children"),
-    Output("cycling-total-output", "children")],
+    Output("cycling-total-output", "children"), Output("cycling-total-time", "children"), Output("cycling-long-ride", "children")],
     [Input("example-button", "n_clicks"),Input("input", "value"),Input("password", "value")]
 )
 def on_button_click(n, value1, value2):
@@ -250,7 +254,7 @@ def on_button_click(n, value1, value2):
     else:
         user_data, user_data_message, user_welcome = getdata(value1, value2)
 
-        rides_message, total_distance, total_output = get_cycling_stats(user_data)
+        rides_message, total_distance, total_output, total_time_output, longest_ride_output = get_cycling_stats(user_data)
 
 
         total_workouts_message, fave_message = numWorkouts(user_data)
@@ -259,7 +263,7 @@ def on_button_click(n, value1, value2):
         combined_message = favoriteInstructor(user_data)
         return('Year has been generated! Check out your Peloton Year In Review using the tabs.',
             user_welcome, total_workouts_message, total_cals_message,fave_message,"",pie,
-            combined_message, rides_message, total_distance, total_output)
+            combined_message, rides_message, total_distance, total_output, total_time_output, longest_ride_output)
 
 def numWorkouts(dt):
     #total number of workouts
@@ -322,7 +326,7 @@ def get_total_calories(data):
     total_cals = data['Calories'].sum()
     total_time = data['workout_length'].sum()
     total_time = round(total_time/60)
-    total_cals_message = "You worked out for " + str(total_time) + " minutes this year (that's " + str(round((total_time/60/24),2)) + " days) and along the way you burned " + str(round(total_cals)) + " calories in 2020."
+    total_cals_message = "You worked out for {:,}".format(total_time) + " minutes this year (that's " + str(round((total_time/60/24),2)) + " days) and along the way you burned {:,}".format(round(total_cals)) + " calories in 2020."
     return total_cals_message
 
 def make_pie(data):
@@ -359,14 +363,22 @@ def get_cycling_stats(data):
     else:
         rides_message = "You completed {} cycling workouts this year...".format(len(cycling_workouts))
 
-        total_output = round(data['Total Output'].sum())
+        total_output = round(cycling_workouts['Total Output'].sum())
         total_iphone_charges = round((total_output*.0002777777/2), 1)
 
-        total_distance = "...rode for {} miles...".format(str( round(data['Distance'].sum(),1)))
-        total_output = "...had a total output of {} Kilojoules  (that's enough to charge your iphone {} times)".format(str(total_output), total_iphone_charges)
+        total_distance = "...rode for {:,} miles...".format(round(cycling_workouts['Distance'].sum(),1))
+        total_output = "...had a total output of {:,} Kilojoules  (that's enough to charge your iphone {} times)".format(total_output, total_iphone_charges)
+
+        total_time = round((cycling_workouts['workout_length'].sum())/60)
+        total_time_output = "All that added up to {:,} minutes on the bike in 2020...".format(total_time)
+
+        long_ride  = round(cycling_workouts['workout_length'].max() / 60)
+
+        longest_ride_output = "...and a longest ride of {} minutes!".format(long_ride)
 
 
-        return rides_message, total_distance, total_output
+
+        return rides_message, total_distance, total_output, total_time_output, longest_ride_output
 
 if __name__ == '__main__':
     app.run_server(debug=True)
