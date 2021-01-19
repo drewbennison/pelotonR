@@ -19,6 +19,7 @@ from dash.dash import no_update
 #CHANGED THEME TO DARK ******
 external_stylesheets = [dbc.themes.DARKLY]
 app = dash.Dash(__name__,external_stylesheets=external_stylesheets)
+app.title = 'Peloton Year In Review' 
 
 # assume you have a "long-form" data frame
 
@@ -53,8 +54,7 @@ tab1_content = html.Div([
                 style={"width": "100%","height": "600px","background-image":'url("https://peloton.shorthandstories.com/how-hiit-hits-different-on-the-bike--tread-and-floor/assets/RNqFtnNyb0/olivia_hiit-ride_oz.gif")'})
 
 
-
-tab2_content = dbc.Card(
+"""tab2_content = dbc.Card(
     dbc.CardBody([
     html.Div(html.H2(id="Title")),
         html.Br(),
@@ -73,6 +73,23 @@ tab2_content = dbc.Card(
             ])
          ])
     )
+"""
+
+tab2_content = html.Div([
+    dbc.Row(dbc.Card(html.H3(id="Title",style={'padding':'20px'}),style={"width": "90rem"},color='dark',outline=True)),
+    html.Br(),
+    dbc.Row([
+        dbc.Col([dbc.Card(dbc.ListGroup(
+        [
+            dbc.ListGroupItem(html.H4(id="total_workouts",style={'padding':'20px'})),
+            dbc.ListGroupItem(html.H4(id="total_calories",style={'padding':'20px'})),
+            dbc.ListGroupItem(html.H4(id="fave_workout",style={'padding':'20px'})),
+            dbc.ListGroupItem(html.H4(id="favorite_instructors",style={'padding':'20px'})),
+        ], flush=True),color="secondary")]),
+        dbc.Col([dbc.Card([html.Br(),html.H3("Your Workout Types of 2020",style={"text-align":"center"}),dcc.Graph(id="workout_pie")], color="secondary", outline=True)]),
+        ])
+    ],style={'padding':'40px',"background-image":'url("https://wallpapercave.com/wp/wp4047946.jpg")'})
+
 
 tab3_content = dbc.Card(
     dbc.CardBody([
@@ -124,14 +141,14 @@ def getdata(value1,value2):
     apidata = s.get(me_url).json()
 
     #Flatten API response into a temporary dataframe
-    df_my_id = pd.json_normalize(apidata)
+    df_my_id = json_normalize(apidata)
     df_my_id_clean = df_my_id[['id']]
     my_id = (df_my_id_clean.iloc[0]['id'])
  
     url = 'https://api.onepeloton.com/api/user/{}/workouts?joins=ride,ride.instructor&limit=1000&page=0'.format(my_id)
     response = s.get(url)
     data = s.get(url).json()
-    df_workouts_raw = pd.json_normalize(data['data'])
+    df_workouts_raw = json_normalize(data['data'])
 
     '''Third API Call - GET Workout Metrics''' 
     #Create Dataframe of Workout IDs to run through our Loop
