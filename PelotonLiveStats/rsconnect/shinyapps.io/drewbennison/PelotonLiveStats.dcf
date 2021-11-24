@@ -5,8 +5,8 @@ account: drewbennison
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 3436458
-bundleId: 4058988
+bundleId: 4061961
 url: https://drewbennison.shinyapps.io/PelotonLiveStats/
-when: 1609816445.84142
+when: 1609881031.59172
 asMultiple: FALSE
 asStatic: FALSE

@@ -86,7 +86,15 @@ server <- function(input, output) {
                      if(input$username!=""&&input$pw!="")
                          
                      {
-                         peloton_auth(login = input$username, password = input$pw)
+                         default <- 0
+                         try(default <- peloton_auth(login = input$username, password = input$pw), silent = TRUE)
+                         while(default == 0) {
+                             output$distPlot <-  renderPlot({
+                                 x <- ggplot() + annotate("text", x = input$time, y = 100, label = "USERNAME OR PASSWORD IS INCORRECT") +
+                                     labs(x="", y="")
+                                 x
+                             })
+                         }
                          me <- get_my_info() # peloton_api("api/me")
                          user_id <- me$id
                          
@@ -451,7 +459,7 @@ server <- function(input, output) {
 
 
 
-        
+                 
 
 }
 
